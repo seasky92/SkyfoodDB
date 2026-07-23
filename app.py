@@ -20,27 +20,36 @@ if st.button("검색하기", type="primary"):
     if search_word:
         with st.spinner('식약처 데이터베이스를 뒤지는 중... 🕵️‍♂️'):
             try:
-                encoded_word = urllib.parse.quote(search_word)
-                url = f"http://apis.data.go.kr/1471000/FoodNtrIrdntInfoService1/getFoodNtrItdntList1?ServiceKey={API_KEY}&desc_kor={encoded_word}&pageNo=1&numOfRows=20&type=json"
+                # 💡 핵심 변경 부분: 안전한 API 호출 방식 적용
+                url = "http://apis.data.go.kr/1471000/FoodNtrIrdntInfoService1/getFoodNtrItdntList1"
                 
-                response = requests.get(url)
+                # 키 값의 앞뒤 공백을 없애고, 안전한 문자로 한번 풀어줍니다.
+                safe_key = urllib.parse.unquote(API_KEY.strip())
                 
-                # 먼저 서버가 보낸 원본 텍스트가 무엇인지 확인합니다 (에러 방지용)
+                # 주소에 직접 붙이지 않고 params라는 안전한 바구니에 담아서 보냅니다.
+                params = {
+                    'ServiceKey': safe_key,
+                    'desc_kor': search_word,
+                    'pageNo': '1',
+                    'numOfRows': '20',
+                    'type': 'json'
+                }
+                
+                response = requests.get(url, params=params)
                 raw_text = response.text
                 
                 try:
                     data = response.json()
                 except Exception:
-                    # JSON 변환에 실패하면, 서버가 보낸 원본 에러 메시지를 띄워줍니다.
                     st.error("🚨 식약처 서버에서 데이터를 정상적으로 보내지 않았습니다.")
                     st.warning("아래 서버 응답을 확인해주세요. (SERVICE_KEY_IS_NOT_REGISTERED_ERROR 라면 키 등록 대기 중입니다!)")
-                    st.code(raw_text) # 원본 에러 메시지 출력
+                    st.code(raw_text)
                     st.stop()
                 
                 items = data.get('body', {}).get('items', [])
                 
                 if not items:
-                    st.warning(f"'{search_word}'에 대한 검색 결과가 없습니다. 이름을 조금 다르게 검색해 보세요.")
+                    st.warning(f"'{search_word}'에 대한 검색 결과가 없습니다.")
                 else:
                     st.success(f"총 {len(items)}개의 검색 결과를 찾았습니다!")
                     
