@@ -64,36 +64,36 @@ df_display = pd.DataFrame(data, columns=['회차', 'n1', 'n2', 'n3', 'n4', 'n5',
 df_display = pd.merge(df_display, df_patterns, on='회차', how='left')
 st.dataframe(df_display.sort_values(by='회차', ascending=False), use_container_width=True)
 
-# 3. 데이터 관리 (탭 대신 라디오 버튼 사용)
-st.subheader("⚙️ 데이터베이스 관리")
-menu = st.radio("작업을 선택하세요", ["📝 신규 입력", "✏️ 수정", "🗑️ 삭제"])
-
-if menu == "📝 신규 입력":
-    with st.form("new_row"):
-        cols = st.columns(8)
-        new_draw = cols[0].number_input("회차", value=data[-1][0]+1 if data else 1)
-        nums = [cols[i+1].number_input(f"n{i+1}", min_value=1, max_value=45, value=i+1) for i in range(6)]
-        bonus = cols[7].number_input("보너스", min_value=1, max_value=45, value=7)
-        if st.form_submit_button("입력 완료"):
-            client.open_by_url(SHEET_URL).sheet1.append_row([new_draw] + nums + [bonus])
-            st.rerun()
-
-elif menu == "✏️ 수정":
-    target_draw = st.selectbox("수정할 회차", [row[0] for row in reversed(data)])
-    target_row = next((row for row in data if row[0] == target_draw), None)
-    if target_row:
-        with st.form("edit_row"):
-            new_nums = [st.number_input(f"n{i+1}", value=target_row[i+1]) for i in range(6)]
-            new_bonus = st.number_input("보너스", value=target_row[7])
-            if st.form_submit_button("수정 적용"):
-                row_idx = data.index(target_row) + 2
-                client.open_by_url(SHEET_URL).sheet1.update(f"A{row_idx}:H{row_idx}", [[target_draw] + new_nums + [new_bonus]])
+# 3. 데이터 관리 (Expander 안에 모든 기능 통합)
+with st.expander("⚙️ 데이터베이스 관리"):
+    menu = st.radio("작업 선택", ["📝 신규 입력", "✏️ 수정", "🗑️ 삭제"])
+    
+    if menu == "📝 신규 입력":
+        with st.form("new_row"):
+            cols = st.columns(8)
+            new_draw = cols[0].number_input("회차", value=data[-1][0]+1 if data else 1)
+            nums = [cols[i+1].number_input(f"n{i+1}", min_value=1, max_value=45, value=i+1) for i in range(6)]
+            bonus = cols[7].number_input("보너스", min_value=1, max_value=45, value=7)
+            if st.form_submit_button("입력 완료"):
+                client.open_by_url(SHEET_URL).sheet1.append_row([new_draw] + nums + [bonus])
                 st.rerun()
 
-elif menu == "🗑️ 삭제":
-    if st.button("마지막 회차 삭제"):
-        client.open_by_url(SHEET_URL).sheet1.delete_rows(len(data)+1)
-        st.rerun()
+    elif menu == "✏️ 수정":
+        target_draw = st.selectbox("수정할 회차", [row[0] for row in reversed(data)])
+        target_row = next((row for row in data if row[0] == target_draw), None)
+        if target_row:
+            with st.form("edit_row"):
+                new_nums = [st.number_input(f"n{i+1}", value=target_row[i+1]) for i in range(6)]
+                new_bonus = st.number_input("보너스", value=target_row[7])
+                if st.form_submit_button("수정 적용"):
+                    row_idx = data.index(target_row) + 2
+                    client.open_by_url(SHEET_URL).sheet1.update(f"A{row_idx}:H{row_idx}", [[target_draw] + new_nums + [new_bonus]])
+                    st.rerun()
+
+    elif menu == "🗑️ 삭제":
+        if st.button("마지막 회차 삭제"):
+            client.open_by_url(SHEET_URL).sheet1.delete_rows(len(data)+1)
+            st.rerun()
 
 # 4. 시각화 및 그래프
 st.subheader("📍 최근 5회차 용지 패턴")
