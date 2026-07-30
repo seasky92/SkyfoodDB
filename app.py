@@ -7,7 +7,7 @@ from google.oauth2.service_account import Credentials
 
 st.set_page_config(page_title="로또 패턴 분석기", layout="wide")
 
-SHEET_URL = "https://docs.google.com/spreadsheets/d/1tW8KwjFh9PZEoLxNyoiboi_UFc9CRFX0tIj0pdIqGf4/edit?usp=drivesdk"
+SHEET_URL = "여기에_구글시트_링크를_붙여넣으세요"
 creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"])
 client = gspread.authorize(creds)
 
@@ -39,7 +39,6 @@ for i in range(4, len(data)):
 
 df_patterns = pd.DataFrame(pattern_data)
 
-# --- UI 시작 ---
 st.title("🎯 로또 패턴 분석 및 추천")
 
 # 1. 랜덤 추천
@@ -65,80 +64,42 @@ df_display = pd.DataFrame(data, columns=['회차', 'n1', 'n2', 'n3', 'n4', 'n5',
 df_display = pd.merge(df_display, df_patterns, on='회차', how='left')
 st.dataframe(df_display.sort_values(by='회차', ascending=False), use_container_width=True)
 
-# 3. 데이터 관리 (신규/수정/삭제 탭 추가)
-with st.expander("⚙️ 데이터베이스 관리"):
-    tab1, tab2, tab3 = st.tabs(["📝 신규 입력", "✏️ 수정", "🗑️ 삭제"])
-    
-    # 신규 입력
-    with tab1:
-        with st.form("new_row"):
-            cols = st.columns(8)
-            new_draw = cols[0].number_input("회차", value=data[-1][0]+1 if data else 1)
-            nums = [cols[i+1].number_input(f"n{i+1}", min_value=1, max_value=45, value=i+1) for i in range(6)]
-            bonus = cols[7].number_input("보너스", min_value=1, max_value=45, value=7)
-            if st.form_submit_button("입력 완료"):
-                client.open_by_url(SHEET_URL).sheet1.append_row([new_draw] + nums + [bonus])
-                st.rerun()
+# 3. 데이터 관리 (탭 구조 명확화)
+st.subheader("⚙️ 데이터베이스 관리")
+tab1, tab2, tab3 = st.tabs(["📝 신규 입력", "✏️ 수정", "🗑️ 삭제"])
 
-    # 수정 기능
-    with tab2:
-        sheet = client.open_by_url(SHEET_URL).sheet1
-        target_draw = st.selectbox("수정할 회차 선택", [row[0] for row in reversed(data)])
-        target_row_data = next((row for row in data if row[0] == target_draw), None)
-        
-        if target_row_data:
-            with st.form("edit_row"):
-                cols = st.columns(8)
-                cols[0].write(f"회차: {target_row_data[0]}")
-                new_nums = [cols[i+1].number_input(f"n{i+1}", min_value=1, max_value=45, value=target_row_data[i+1]) for i in range(6)]
-                new_bonus = cols[7].number_input("보너스", min_value=1, max_value=45, value=target_row_data[7])
-                if st.form_submit_button("수정 적용"):
-                    # 해당 회차를 찾아 행 번호를 구함
-                    row_idx = data.index(target_row_data) + 2 # 헤더 포함 +1
-                    sheet.update(f"A{row_idx}:H{row_idx}", [[target_draw] + new_nums + [new_bonus]])
-                    st.rerun()
-
-    # 삭제 기능
-    with tab3:
-        if st.button("마지막 회차 삭제"):
-            client.open_by_url(SHEET_URL).sheet1.delete_rows(len(data)+1)
+with tab1:
+    with st.form("new_row"):
+        cols = st.columns(8)
+        new_draw = cols[0].number_input("회차", value=data[-1][0]+1 if data else 1)
+        nums = [cols[i+1].number_input(f"n{i+1}", min_value=1, max_value=45, value=i+1) for i in range(6)]
+        bonus = cols[7].number_input("보너스", min_value=1, max_value=45, value=7)
+        if st.form_submit_button("입력 완료"):
+            client.open_by_url(SHEET_URL).sheet1.append_row([new_draw] + nums + [bonus])
             st.rerun()
 
-# 4. 최근 5회차 용지 패턴
-st.subheader("📍 최근 5회차 용지 패턴 (시각화)")
+with tab2:
+    target_draw = st.selectbox("수정할 회차", [row[0] for row in reversed(data)])
+    target_row = next((row for row in data if row[0] == target_draw), None)
+    if target_row:
+        with st.form("edit_row"):
+            new_nums = [st.number_input(f"n{i+1}", value=target_row[i+1]) for i in range(6)]
+            new_bonus = st.number_input("보너스", value=target_row[7])
+            if st.form_submit_button("수정 적용"):
+                row_idx = data.index(target_row) + 2
+                client.open_by_url(SHEET_URL).sheet1.update(f"A{row_idx}:H{row_idx}", [[target_draw] + new_nums + [new_bonus]])
+                st.rerun()
+
+with tab3:
+    if st.button("마지막 회차 삭제"):
+        client.open_by_url(SHEET_URL).sheet1.delete_rows(len(data)+1)
+        st.rerun()
+
+# 4. 시각화 및 그래프
+st.subheader("📍 최근 5회차 용지 패턴")
 recent_5 = list(reversed(data[-5:]))
-tabs = st.tabs([f"{row[0]}회차" for row in recent_5])
-for i, tab in enumerate(tabs):
-    with tab:
-        win_nums, bonus = recent_5[i][1:7], recent_5[i][7]
-        grid_html = "<div style='display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; max-width: 320px;'>"
-        for n in range(1, 46):
-            style = "background:#ff4b4b; color:white;" if n in win_nums else "background:#00cc66; color:white;" if n==bonus else "background:#f0f2f6; border:1px solid #ddd;"
-            grid_html += f"<div style='{style} border-radius:4px; padding:8px 0; text-align:center;'>{n}</div>"
-        st.markdown(grid_html + "</div>", unsafe_allow_html=True)
+for row in recent_5:
+    st.write(f"**{row[0]}회차:** {sorted(row[1:7])} (보너스: {row[7]})")
 
-# 5. 그래프
-st.divider()
-st.subheader("📊 패턴 출현 빈도 그래프 (933회 ~ 1233회)")
-df_graph = df_patterns[(df_patterns['회차'] >= 933) & (df_patterns['회차'] <= 1233)]
-st.bar_chart(df_graph['패턴'].value_counts())
-
-    # 신규 입력 탭 (에러 확인용)
-    with tab1:
-        with st.form("new_row"):
-            cols = st.columns(8)
-            new_draw = cols[0].number_input("회차", value=data[-1][0]+1 if data else 1)
-            nums = [cols[i+1].number_input(f"n{i+1}", min_value=1, max_value=45, value=1) for i in range(6)]
-            bonus = cols[7].number_input("보너스", min_value=1, max_value=45, value=7)
-            
-            if st.form_submit_button("입력 완료"):
-                try:
-                    # 데이터 입력 시도
-                    sheet = client.open_by_url(SHEET_URL).sheet1
-                    sheet.append_row([new_draw] + nums + [bonus])
-                    st.success("데이터가 성공적으로 입력되었습니다!")
-                    st.rerun()
-                except Exception as e:
-                    # 에러가 발생하면 화면에 보여줌
-                    st.error(f"🚨 입력 실패: {e}")
-
+st.subheader("📊 패턴 출현 빈도 그래프")
+st.bar_chart(df_patterns['패턴'].value_counts())
