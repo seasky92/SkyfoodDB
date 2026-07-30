@@ -122,3 +122,23 @@ st.divider()
 st.subheader("📊 패턴 출현 빈도 그래프 (933회 ~ 1233회)")
 df_graph = df_patterns[(df_patterns['회차'] >= 933) & (df_patterns['회차'] <= 1233)]
 st.bar_chart(df_graph['패턴'].value_counts())
+
+    # 신규 입력 탭 (에러 확인용)
+    with tab1:
+        with st.form("new_row"):
+            cols = st.columns(8)
+            new_draw = cols[0].number_input("회차", value=data[-1][0]+1 if data else 1)
+            nums = [cols[i+1].number_input(f"n{i+1}", min_value=1, max_value=45, value=1) for i in range(6)]
+            bonus = cols[7].number_input("보너스", min_value=1, max_value=45, value=7)
+            
+            if st.form_submit_button("입력 완료"):
+                try:
+                    # 데이터 입력 시도
+                    sheet = client.open_by_url(SHEET_URL).sheet1
+                    sheet.append_row([new_draw] + nums + [bonus])
+                    st.success("데이터가 성공적으로 입력되었습니다!")
+                    st.rerun()
+                except Exception as e:
+                    # 에러가 발생하면 화면에 보여줌
+                    st.error(f"🚨 입력 실패: {e}")
+
