@@ -7,7 +7,7 @@ from google.oauth2.service_account import Credentials
 
 st.set_page_config(page_title="로또 패턴 분석기", layout="wide")
 
-SHEET_URL = "여기에_구글시트_링크를_붙여넣으세요"
+SHEET_URL = "https://docs.google.com/spreadsheets/d/1tW8KwjFh9PZEoLxNyoiboi_UFc9CRFX0tIj0pdIqGf4/edit?usp=drivesdk"
 creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"])
 client = gspread.authorize(creds)
 
