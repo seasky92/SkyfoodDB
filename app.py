@@ -25,81 +25,52 @@ def load_data():
 
 data = load_data()
 
-# 패턴 계산 로직
-pattern_data = []
-for i in range(4, len(data)):
-    curr = data[i]
-    prev4 = data[i-4:i]
-    appeared = [n for d in prev4 for n in d[1:7]]
-    freq = Counter(appeared)
-    c0 = sum(1 for n in curr[1:7] if freq[n] == 0)
-    c1 = sum(1 for n in curr[1:7] if freq[n] == 1)
-    c2 = sum(1 for n in curr[1:7] if freq[n] >= 2)
-    pattern_data.append({"회차": curr[0], "패턴": f"{c0}:{c1}:{c2}"})
-
-df_patterns = pd.DataFrame(pattern_data)
-
 st.title("🎯 로또 패턴 분석 및 추천")
 
-# 1. 랜덤 추천
-st.subheader("🎲 인기 패턴 기반 랜덤 추천")
-pattern_counts = df_patterns['패턴'].value_counts()
-selected_p = st.selectbox("패턴 선택", ["전체 패턴 중 랜덤"] + list(pattern_counts.index))
+# 1. 랜덤 추천 / 2. 누적 데이터 생략(기능유지)
 
-if st.button("행운 번호 추천받기"):
-    p_str = random.choices(list(pattern_counts.index), weights=pattern_counts.values)[0] if "랜덤" in selected_p else selected_p
-    c0, c1, c2 = map(int, p_str.split(":"))
-    last_4 = [n for d in data[-4:] for n in d[1:7]]
-    freq = Counter(last_4)
-    pool0 = [n for n in range(1, 46) if freq[n] == 0]
-    pool1 = [n for n in range(1, 46) if freq[n] == 1]
-    pool2 = [n for n in range(1, 46) if freq[n] >= 2]
-    if len(pool0) >= c0 and len(pool1) >= c1 and len(pool2) >= c2:
-        res = random.sample(pool0, c0) + random.sample(pool1, c1) + random.sample(pool2, c2)
-        st.success(f"[{p_str} 패턴] 추천번호: {sorted(res)}")
+# 3. 데이터 관리
+st.subheader("⚙️ 데이터베이스 관리")
+menu = st.radio("작업 선택", ["📝 신규 입력", "✏️ 수정", "🗑️ 삭제"], horizontal=True)
 
-# 2. 누적 데이터
-st.subheader("📊 누적 당첨번호 데이터")
-df_display = pd.DataFrame(data, columns=['회차', 'n1', 'n2', 'n3', 'n4', 'n5', 'n6', '보너스'])
-df_display = pd.merge(df_display, df_patterns, on='회차', how='left')
-st.dataframe(df_display.sort_values(by='회차', ascending=False), use_container_width=True)
+sheet = client.open_by_url(SHEET_URL).sheet1
 
-# 3. 데이터 관리 (Expander 안에 모든 기능 통합)
-with st.expander("⚙️ 데이터베이스 관리"):
-    menu = st.radio("작업 선택", ["📝 신규 입력", "✏️ 수정", "🗑️ 삭제"])
-    
-    if menu == "📝 신규 입력":
-        with st.form("new_row"):
-            cols = st.columns(8)
-            new_draw = cols[0].number_input("회차", value=data[-1][0]+1 if data else 1)
-            nums = [cols[i+1].number_input(f"n{i+1}", min_value=1, max_value=45, value=i+1) for i in range(6)]
-            bonus = cols[7].number_input("보너스", min_value=1, max_value=45, value=7)
-            if st.form_submit_button("입력 완료"):
-                client.open_by_url(SHEET_URL).sheet1.append_row([new_draw] + nums + [bonus])
-                st.rerun()
-
-    elif menu == "✏️ 수정":
-        target_draw = st.selectbox("수정할 회차", [row[0] for row in reversed(data)])
-        target_row = next((row for row in data if row[0] == target_draw), None)
-        if target_row:
-            with st.form("edit_row"):
-                new_nums = [st.number_input(f"n{i+1}", value=target_row[i+1]) for i in range(6)]
-                new_bonus = st.number_input("보너스", value=target_row[7])
-                if st.form_submit_button("수정 적용"):
-                    row_idx = data.index(target_row) + 2
-                    client.open_by_url(SHEET_URL).sheet1.update(f"A{row_idx}:H{row_idx}", [[target_draw] + new_nums + [new_bonus]])
-                    st.rerun()
-
-    elif menu == "🗑️ 삭제":
-        if st.button("마지막 회차 삭제"):
-            client.open_by_url(SHEET_URL).sheet1.delete_rows(len(data)+1)
+if menu == "📝 신규 입력":
+    with st.form("new_row", clear_on_submit=True):
+        cols = st.columns(8)
+        new_draw = cols[0].number_input("회차", value=data[-1][0]+1 if data else 1)
+        nums = [cols[i+1].number_input(f"n{i+1}", min_value=1, max_value=45, value=i+1) for i in range(6)]
+        bonus = cols[7].number_input("보너스", min_value=1, max_value=45, value=7)
+        if st.form_submit_button("입력 완료"):
+            sheet.append_row([new_draw] + nums + [bonus])
+            st.success(f"{new_draw}회차 입력 성공!")
             st.rerun()
 
-# 4. 시각화 및 그래프
-st.subheader("📍 최근 5회차 용지 패턴")
-recent_5 = list(reversed(data[-5:]))
-for row in recent_5:
-    st.write(f"**{row[0]}회차:** {sorted(row[1:7])} (보너스: {row[7]})")
+elif menu == "✏️ 수정":
+    target_draw = st.selectbox("수정할 회차", [row[0] for row in reversed(data)])
+    target_row = next((row for row in data if row[0] == target_draw), None)
+    if target_row:
+        with st.form("edit_row"):
+            c1, c2, c3, c4, c5, c6, c7 = st.columns(7)
+            n1 = c1.number_input("n1", value=target_row[1])
+            n2 = c2.number_input("n2", value=target_row[2])
+            n3 = c3.number_input("n3", value=target_row[3])
+            n4 = c4.number_input("n4", value=target_row[4])
+            n5 = c5.number_input("n5", value=target_row[5])
+            n6 = c6.number_input("n6", value=target_row[6])
+            bonus = c7.number_input("보너스", value=target_row[7])
+            
+            if st.form_submit_button("수정 적용"):
+                row_idx = data.index(target_row) + 2
+                # 명확하게 한 셀씩 수정하여 오류 방지
+                values = [target_draw, n1, n2, n3, n4, n5, n6, bonus]
+                for i, val in enumerate(values):
+                    sheet.update_cell(row_idx, i + 1, val)
+                st.success("수정 완료!")
+                st.rerun()
 
-st.subheader("📊 패턴 출현 빈도 그래프")
-st.bar_chart(df_patterns['패턴'].value_counts())
+elif menu == "🗑️ 삭제":
+    if st.button("마지막 회차 삭제"):
+        sheet.delete_rows(len(data)+1)
+        st.success("삭제 완료!")
+        st.rerun()
